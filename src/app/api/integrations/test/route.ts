@@ -38,7 +38,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error:
-              "Enter a complete Gemini API key from Google AI Studio. It should begin with AIza.",
+              "Enter a complete Gemini API key from Google AI Studio.",
           },
           { status: 400 },
         );

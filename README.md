@@ -21,6 +21,7 @@ Fill these values in `.env.local`:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `APIFY_LINKEDIN_ACTOR_ID` (default: `curious_coder/linkedin-jobs-scraper`)
+- `GEMINI_JOB_SCREENING_ENABLED` (default: `false`; enable only when your Gemini quota supports extra scoring requests)
 - `GEMINI_MODEL` (default: `gemini-2.5-flash`)
 - `INTEGRATION_ENCRYPTION_KEY` (generate with `openssl rand -base64 32`)
 

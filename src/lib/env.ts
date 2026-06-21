@@ -12,6 +12,10 @@ const serverEnvSchema = z.object({
         .min(1)
         .default("curious_coder/linkedin-jobs-scraper"),
     GEMINI_MODEL: z.string().min(1).default("gemini-2.5-flash"),
+    GEMINI_JOB_SCREENING_ENABLED: z
+        .enum(["true", "false"])
+        .default("false")
+        .transform((value) => value === "true"),
     INTEGRATION_ENCRYPTION_KEY: z.string().min(1).optional(),
 });
 
@@ -21,6 +25,7 @@ const rawEnv = {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     APIFY_LINKEDIN_ACTOR_ID: process.env.APIFY_LINKEDIN_ACTOR_ID,
     GEMINI_MODEL: process.env.GEMINI_MODEL,
+    GEMINI_JOB_SCREENING_ENABLED: process.env.GEMINI_JOB_SCREENING_ENABLED,
     INTEGRATION_ENCRYPTION_KEY: process.env.INTEGRATION_ENCRYPTION_KEY,
 };
 

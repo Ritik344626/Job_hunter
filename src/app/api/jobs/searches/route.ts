@@ -68,10 +68,11 @@ export async function POST(request: Request) {
     remoteOnly: parsedBody.data.remoteOnly,
     maxItems: parsedBody.data.maxItems,
     actorId: env.APIFY_LINKEDIN_ACTOR_ID,
+    filters: parsedBody.data,
   });
 
   try {
-    const actorInput = buildLinkedInActorInput(parsedBody.data);
+    const actorInput = await buildLinkedInActorInput(integration.geminiApiKey, parsedBody.data);
     console.info("Starting LinkedIn actor", {
       actorId: env.APIFY_LINKEDIN_ACTOR_ID,
       searchRunId: searchRun.id,

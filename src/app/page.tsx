@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/client";
@@ -11,7 +11,7 @@ type IntegrationStatus = {
   updatedAt: string | null;
 };
 
-type SearchRunStatus = "queued" | "running" | "completed" | "failed";
+type SearchRunStatus = "queued" | "running" | "screening" | "completed" | "failed";
 
 type SearchRunResponse = {
   id: string;
@@ -19,6 +19,7 @@ type SearchRunResponse = {
   jobsFound: number;
   error: string | null;
   items?: Record<string, unknown>[];
+  isScreening?: boolean;
 };
 
 type SavedSearchFilters = {
@@ -63,6 +64,7 @@ type IconName =
   | "briefcase"
   | "check"
   | "chevron"
+  | "eye"
   | "key"
   | "location"
   | "logout"
@@ -154,6 +156,7 @@ function Icon({ name, className = "" }: { name: IconName; className?: string }) 
     briefcase: <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m-12 0h16a1 1 0 0 1 1 1v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V8a1 1 0 0 1 1-1Zm-1 5h18" />,
     check: <path d="m5 12 4.2 4L19 6" />,
     chevron: <path d="m7 10 5 5 5-5" />,
+    eye: <><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.5" /></>,
     key: <path d="M15.5 7.5a4.5 4.5 0 1 1-8.8 1.4L2.8 12.8v2.4h2.4v2.4H8v-2.4h2.4l.9-.9a4.5 4.5 0 0 1 4.2-6.8Zm1.5 0h.01" />,
     location: <path d="M12 21s7-5.3 7-12a7 7 0 1 0-14 0c0 6.7 7 12 7 12Zm0-9.5h.01" />,
     logout: <path d="M10 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h5m4-4 4-3-4-3m4 3H8" />,
@@ -305,10 +308,30 @@ function getJobValue(job: Record<string, unknown>, keys: string[]) {
   return undefined;
 }
 
-function getSearchProgress(status: SearchRunStatus) {
+function getJobMatchScore(job: Record<string, unknown>): number {
+  let matchScore = typeof job.matchScore === "number" ? job.matchScore : undefined;
+  if (matchScore === undefined && typeof job.match_score === "number") {
+    matchScore = job.match_score;
+  }
+  if (matchScore === undefined) {
+    const description = getJobValue(job, ["description", "jobDescription", "summary"]);
+    if (typeof description === "string") {
+      const matchRegex = /^\[Match Score:\s*(\d+)%\]/;
+      const matchResult = matchRegex.exec(description);
+      if (matchResult) {
+        matchScore = parseInt(matchResult[1], 10);
+      }
+    }
+  }
+  return matchScore ?? 0;
+}
+
+function getSearchProgress(status: SearchRunStatus, isScreening = false) {
+  if (isScreening) return 85;
   const progress = {
-    queued: 18,
-    running: 68,
+    queued: 15,
+    running: 60,
+    screening: 85,
     completed: 100,
     failed: 100,
   };
@@ -316,10 +339,12 @@ function getSearchProgress(status: SearchRunStatus) {
   return progress[status];
 }
 
-function getSearchStage(status: SearchRunStatus) {
+function getSearchStage(status: SearchRunStatus, isScreening = false) {
+  if (isScreening) return "AI is screening and scoring matches";
   const stage = {
     queued: "Preparing your LinkedIn search",
     running: "Apify is collecting live roles",
+    screening: "AI is screening and scoring matches",
     completed: "Search complete",
     failed: "Search needs attention",
   };
@@ -341,7 +366,7 @@ export default function Home() {
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [postedWithin, setPostedWithin] = useState("Any time");
   const [experienceLevel, setExperienceLevel] = useState("Any experience");
-  const [maxItems, setMaxItems] = useState(25);
+  const [maxItems, setMaxItems] = useState(50);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -357,6 +382,57 @@ export default function Home() {
   const [activeView, setActiveView] = useState<"search" | "saved" | "pipeline">("search");
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [pipelineItems, setPipelineItems] = useState<PipelineItem[]>([]);
+  const [openedJobIds, setOpenedJobIds] = useState<string[]>([]);
+  const [hideViewed, setHideViewed] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    const stored = localStorage.getItem("opened_jobs");
+    if (stored) {
+      try {
+        setOpenedJobIds(JSON.parse(stored));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
+  const handleJobOpened = useCallback((jobId: string) => {
+    if (!jobId) return;
+    setOpenedJobIds((prev) => {
+      if (prev.includes(jobId)) return prev;
+      const next = [...prev, jobId];
+      localStorage.setItem("opened_jobs", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [jobs, hideViewed]);
+
+  const sortedJobs = useMemo(() => {
+    const jobsCopy = [...jobs];
+    return jobsCopy.sort((a, b) => getJobMatchScore(b) - getJobMatchScore(a));
+  }, [jobs]);
+
+  const displayedJobs = useMemo(() => {
+    let filtered = sortedJobs;
+    if (hideViewed) {
+      filtered = filtered.filter((job) => {
+        const jobId = (getJobValue(job, ["id", "url", "jobUrl"]) as string) ?? "";
+        return !openedJobIds.includes(jobId);
+      });
+    }
+    return filtered;
+  }, [sortedJobs, hideViewed, openedJobIds]);
+
+  const totalPages = Math.ceil(displayedJobs.length / itemsPerPage);
+  const paginatedJobs = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return displayedJobs.slice(startIndex, startIndex + itemsPerPage);
+  }, [displayedJobs, currentPage]);
 
   const integrationsReady = integrationStatus.hasGeminiKey && integrationStatus.hasApifyToken;
   const firstName = user?.user_metadata.full_name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "there";
@@ -835,14 +911,97 @@ export default function Home() {
                 <div className="lg:col-span-3"><SearchSelect icon="target" label="experience range" onChange={setExperienceLevel} options={experienceLevelOptions} placeholder="Choose experience range" value={experienceLevel} /></div>
                 <label className="flex h-12 cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/[.07] px-3 text-sm font-medium text-slate-200 lg:col-span-2"><input checked={remoteOnly} className="accent-violet-400" onChange={(event) => setRemoteOnly(event.target.checked)} type="checkbox" />Also remote</label>
               </div>
-              {activeSearch ? <div className="relative mt-5 rounded-xl border border-white/10 bg-black/10 px-3 py-3"><div className="flex items-center justify-between gap-3 text-xs"><span className={`font-semibold ${activeSearch.status === "failed" ? "text-rose-300" : "text-violet-100"}`}>{getSearchStage(activeSearch.status)}</span><span className="shrink-0 text-slate-400">{getSearchProgress(activeSearch.status)}%</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full transition-all duration-700 ${activeSearch.status === "failed" ? "bg-rose-400" : "bg-violet-300"}`} style={{ width: `${getSearchProgress(activeSearch.status)}%` }} /></div></div> : null}
-              <div className="relative mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-400"><span>{status}</span><span className="hidden h-1 w-1 rounded-full bg-slate-600 sm:block" /><label className="flex items-center gap-1.5">Show<select aria-label="Maximum jobs" className="bg-transparent font-semibold text-slate-200 outline-none" onChange={(event) => setMaxItems(Number(event.target.value))} value={maxItems}><option className="text-slate-900" value={10}>10</option><option className="text-slate-900" value={25}>25</option><option className="text-slate-900" value={50}>50</option></select>roles</label></div>
+              {activeSearch ? <div className="relative mt-5 rounded-xl border border-white/10 bg-black/10 px-3 py-3"><div className="flex items-center justify-between gap-3 text-xs"><span className={`font-semibold ${activeSearch.status === "failed" ? "text-rose-300" : "text-violet-100"}`}>{getSearchStage(activeSearch.status, activeSearch.isScreening)}</span><span className="shrink-0 text-slate-400">{getSearchProgress(activeSearch.status, activeSearch.isScreening)}%</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full transition-all duration-700 ${activeSearch.status === "failed" ? "bg-rose-400" : "bg-violet-300"}`} style={{ width: `${getSearchProgress(activeSearch.status, activeSearch.isScreening)}%` }} /></div></div> : null}
+              <div className="relative mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                <span>{status}</span>
+                <span className="hidden h-1 w-1 rounded-full bg-slate-600 sm:block" />
+                <label className="flex items-center gap-1.5">
+                  Show
+                  <select aria-label="Maximum jobs" className="bg-transparent font-semibold text-slate-200 outline-none" onChange={(event) => setMaxItems(Number(event.target.value))} value={maxItems}>
+                    <option className="text-slate-900" value={10}>10</option>
+                    <option className="text-slate-900" value={25}>25</option>
+                    <option className="text-slate-900" value={50}>50</option>
+                    <option className="text-slate-900" value={100}>100</option>
+                  </select>
+                  roles
+                </label>
+                {jobs.length ? (
+                  <>
+                    <span className="hidden h-1 w-1 rounded-full bg-slate-600 sm:block" />
+                    <label className="flex cursor-pointer items-center gap-1.5 select-none font-medium hover:text-slate-200">
+                      <input type="checkbox" checked={hideViewed} onChange={(e) => setHideViewed(e.target.checked)} className="accent-violet-400" />
+                      Hide viewed roles ({openedJobIds.filter(id => jobs.some(j => getJobValue(j, ["id", "url", "jobUrl"]) === id)).length} hidden)
+                    </label>
+                  </>
+                ) : null}
+              </div>
             </div>
           </section>
 
           <section className="mt-9">
-            <div className="flex items-end justify-between gap-4"><div><h2 className="text-xl font-semibold tracking-[-0.025em] text-slate-950">{jobs.length ? "Search results" : "Your next great role starts here"}</h2><p className="mt-1 text-sm text-slate-500">{jobs.length ? `${jobs.length} roles from your latest live search.` : "Connect your tools, then run a search to see new opportunities."}</p></div>{jobs.length ? <button className="text-sm font-semibold text-violet-700 hover:text-violet-900" onClick={() => setJobs([])} type="button">Clear results</button> : null}</div>
-            {jobs.length ? <div className="mt-5 grid gap-3">{jobs.map((job, index) => <JobCard job={job} key={`${getJobValue(job, ["id", "url", "jobUrl", "title"]) ?? "job"}-${index}`} onAddToPipeline={addJobToPipeline} />)}</div> : <EmptyState isReady={integrationsReady} onConnect={() => setShowSettings(true)} />}
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><h2 className="text-xl font-semibold tracking-[-0.025em] text-slate-950">{jobs.length ? "Search results" : "Your next great role starts here"}</h2><p className="mt-1 text-sm text-slate-500">{jobs.length ? `${jobs.length} roles from your latest live search.` : "Connect your tools, then run a search to see new opportunities."}</p></div>{jobs.length ? <div className="flex items-center gap-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">Best matches first</span><button className="text-sm font-semibold text-violet-700 hover:text-violet-900" onClick={() => setJobs([])} type="button">Clear results</button></div> : null}</div>
+            {paginatedJobs.length ? (
+              <>
+                <div className="mt-5 grid gap-3">
+                  {paginatedJobs.map((job, index) => {
+                    const jobId = (getJobValue(job, ["id", "url", "jobUrl"]) as string) ?? "";
+                    return (
+                      <JobCard
+                        job={job}
+                        key={`${getJobValue(job, ["id", "url", "jobUrl", "title"]) ?? "job"}-${index}`}
+                        onAddToPipeline={addJobToPipeline}
+                        isOpened={openedJobIds.includes(jobId)}
+                        onMarkOpened={() => handleJobOpened(jobId)}
+                      />
+                    );
+                  })}
+                </div>
+                {totalPages > 1 && (
+                  <div className="mt-6 flex flex-col justify-between gap-4 border-t border-slate-200 pt-4 sm:flex-row sm:items-center">
+                    <span className="text-xs text-slate-500">
+                      Showing <strong className="font-semibold text-slate-900">{Math.min(displayedJobs.length, (currentPage - 1) * itemsPerPage + 1)}</strong> to{" "}
+                      <strong className="font-semibold text-slate-900">{Math.min(displayedJobs.length, currentPage * itemsPerPage)}</strong> of{" "}
+                      <strong className="font-semibold text-slate-900">{displayedJobs.length}</strong> roles
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
+                        onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        type="button"
+                      >
+                        <Icon name="arrow" className="h-4 w-4 rotate-180" />
+                      </button>
+                      {Array.from({ length: totalPages }).map((_, i) => {
+                        const pageNum = i + 1;
+                        return (
+                          <button
+                            key={pageNum}
+                            className={`inline-flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold transition ${
+                              currentPage === pageNum
+                                ? "bg-violet-600 text-white"
+                                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                            }`}
+                            onClick={() => setCurrentPage(pageNum)}
+                            type="button"
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                      <button
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
+                        onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        type="button"
+                      >
+                        <Icon name="arrow" className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : <EmptyState isReady={integrationsReady} onConnect={() => setShowSettings(true)} />}
           </section>
           </> : activeView === "saved" ? <SavedSearchesView searches={savedSearches} onDelete={deleteSearch} onUse={useSavedSearch} /> : <PipelineView items={pipelineItems} onUpdateStatus={updatePipelineStatus} />}
         </section>
@@ -942,13 +1101,94 @@ function EmptyState({ isReady, onConnect }: { isReady: boolean; onConnect: () =>
   return <div className="mt-5 grid min-h-64 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white/60 p-8 text-center"><div><div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-violet-100 text-violet-700"><Icon className="h-6 w-6" name={isReady ? "search" : "key"} /></div><h3 className="mt-4 font-semibold text-slate-900">{isReady ? "Ready to uncover a great fit" : "One small step before your first search"}</h3><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">{isReady ? "Choose a role, location, and search scope above. We’ll bring the fresh roles back here." : "Connect Gemini and Apify with your own API credentials. It takes about a minute."}</p>{!isReady ? <button className="mt-5 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-violet-700" onClick={onConnect} type="button">Connect integrations</button> : null}</div></div>;
 }
 
-function JobCard({ job, onAddToPipeline }: { job: Record<string, unknown>; onAddToPipeline: (job: Record<string, unknown>) => Promise<void> }) {
+function JobCard({
+  job,
+  onAddToPipeline,
+  isOpened,
+  onMarkOpened,
+}: {
+  job: Record<string, unknown>;
+  onAddToPipeline: (job: Record<string, unknown>) => Promise<void>;
+  isOpened: boolean;
+  onMarkOpened: () => void;
+}) {
   const title = getJobValue(job, ["title", "jobTitle", "position", "job_title"]) ?? "Untitled role";
   const company = getJobValue(job, ["companyName", "company", "company_name", "organization"]) ?? "Company not provided";
   const jobLocation = getJobValue(job, ["location", "jobLocation", "job_location"]) ?? "Location not provided";
   const url = getJobValue(job, ["jobUrl", "url", "link", "job_url"]);
   const description = getJobValue(job, ["description", "jobDescription", "summary"]);
-  return <article className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-md"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div className="min-w-0"><div className="flex items-center gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-sm font-bold text-violet-700">{company.slice(0, 1).toUpperCase()}</div><div className="min-w-0"><h3 className="truncate font-semibold tracking-[-0.02em] text-slate-950">{title}</h3><p className="mt-0.5 text-sm text-slate-500">{company}</p></div></div><div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-slate-500"><span className="flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" name="location" />{jobLocation}</span><span className="flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" name="briefcase" />Live LinkedIn listing</span></div>{description ? <p className="mt-3 line-clamp-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p> : null}</div><div className="flex shrink-0 gap-2"><button className="inline-flex items-center justify-center rounded-xl border border-violet-200 px-3.5 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-50" onClick={() => void onAddToPipeline(job)} type="button">Track</button>{url ? <a className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-violet-300 hover:bg-violet-50 hover:text-violet-800" href={url} rel="noreferrer" target="_blank">View role<Icon className="h-3.5 w-3.5" name="arrow" /></a> : null}</div></div></article>;
+
+  let matchScore = typeof job.matchScore === "number" ? job.matchScore : undefined;
+  if (matchScore === undefined && typeof job.match_score === "number") {
+    matchScore = job.match_score;
+  }
+
+  let displayDescription = description as string | null;
+  if (displayDescription && matchScore === undefined) {
+    const matchRegex = /^\[Match Score:\s*(\d+)%\]\n(?:\[Reason:\s*[^\]\n]+\]\n)?\n/;
+    const matchResult = matchRegex.exec(displayDescription);
+    if (matchResult) {
+      if (matchScore === undefined) {
+        matchScore = parseInt(matchResult[1], 10);
+      }
+      displayDescription = displayDescription.replace(matchRegex, "");
+    }
+  }
+  const matchLabel = matchScore === undefined
+    ? null
+    : matchScore >= 90
+      ? "Perfect match"
+      : matchScore >= 80
+        ? "Strong match"
+        : matchScore >= 70
+          ? "Good match"
+          : "Potential match";
+
+  return (
+    <article className="rounded-xl border border-slate-200 bg-white p-5 transition hover:border-slate-300 hover:shadow-sm">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-violet-100 text-sm font-bold text-violet-700">
+              {company.slice(0, 1).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <h3 className="truncate font-semibold tracking-[-0.02em] text-slate-950">{title}</h3>
+                {matchScore !== undefined ? (
+                  <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                    matchScore >= 90
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : matchScore >= 75
+                        ? "border-violet-200 bg-violet-50 text-violet-700"
+                        : "border-slate-200 bg-slate-50 text-slate-600"
+                  }`}>
+                    <Icon className="h-3.5 w-3.5" name="sparkle" />{matchLabel} · {matchScore}%
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-0.5 text-sm text-slate-500">{company}</p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-slate-500">
+            <span className="flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" name="location" />{jobLocation}</span>
+            <span className="flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" name="briefcase" />LinkedIn listing</span>
+          </div>
+
+          {displayDescription ? <p className="mt-3 line-clamp-2 max-w-3xl text-sm leading-6 text-slate-500">{displayDescription}</p> : null}
+
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2 sm:items-end">
+          <div className="flex gap-2">
+            <button className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700" onClick={() => void onAddToPipeline(job)} type="button">Track</button>
+            {url ? <a className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-violet-700" href={url} onClick={onMarkOpened} rel="noreferrer" target="_blank">{isOpened ? "Already viewed" : "View"}<Icon className="h-3.5 w-3.5" name="arrow" /></a> : null}
+          </div>
+        </div>
+      </div>
+    </article>
+  );
 }
 
 function SavedSearchesView({ searches, onDelete, onUse }: { searches: SavedSearch[]; onDelete: (searchId: string) => Promise<void>; onUse: (search: SavedSearch) => void }) {

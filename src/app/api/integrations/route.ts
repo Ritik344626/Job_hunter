@@ -55,7 +55,7 @@ function getSafeErrorMessage(error: unknown, fallback: string) {
   }
 
   if (error.message === "INVALID_GEMINI_KEY_FORMAT") {
-    return "Enter a complete Gemini API key from Google AI Studio. It should begin with AIza.";
+    return "Enter a complete Gemini API key from Google AI Studio.";
   }
 
   return fallback;

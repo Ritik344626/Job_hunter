@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     }
 
   try {
-    const actorInput = buildLinkedInActorInput(parsedBody.data);
+    const actorInput = await buildLinkedInActorInput(integration.geminiApiKey, parsedBody.data);
     console.info("Starting LinkedIn actor", {
       actorId: env.APIFY_LINKEDIN_ACTOR_ID,
       actorInput,
