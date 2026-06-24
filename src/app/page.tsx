@@ -555,7 +555,13 @@ export default function Home() {
     setStatus(isSignUp ? "Creating your workspace..." : "Signing you in...");
 
     const { error } = isSignUp
-      ? await supabase.auth.signUp({ email, password })
+      ? await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
       : await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
