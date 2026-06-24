@@ -230,7 +230,7 @@ function SearchSelect({ allowCustom = false, icon, label, onChange, options, pla
         </button>
       )}
       {isOpen ? (
-        <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-full min-w-64 overflow-hidden rounded-2xl border border-white/10 bg-[#292b46] p-1.5 shadow-[0_22px_45px_-18px_rgba(0,0,0,.75)]">
+        <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-[min(16rem,calc(100vw-3rem))] sm:min-w-64 overflow-hidden rounded-2xl border border-white/10 bg-[#292b46] p-1.5 shadow-[0_22px_45px_-18px_rgba(0,0,0,.75)]">
           <p className="px-2.5 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-200">Popular {label}s</p>
           <div className="max-h-60 overflow-y-auto pr-1">
             {options.map((option) => <button className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2.5 text-left text-sm transition ${option === value ? "bg-violet-400/20 font-semibold text-white" : "text-slate-200 hover:bg-white/10"}`} key={option} onClick={() => chooseOption(option)} type="button"><span>{option}</span>{option === value ? <Icon className="h-4 w-4 text-violet-200" name="check" /> : null}</button>)}
@@ -283,7 +283,7 @@ function MultiSearchSelect({ customLabel, heading, icon, onChange, options, plac
         <Icon className={`h-4 w-4 shrink-0 text-slate-400 transition ${isOpen ? "rotate-180" : ""}`} name="chevron" />
       </button>
       {isOpen ? (
-        <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-full min-w-80 overflow-hidden rounded-2xl border border-white/10 bg-[#292b46] p-1.5 shadow-[0_22px_45px_-18px_rgba(0,0,0,.75)]">
+        <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-[min(20rem,calc(100vw-3rem))] sm:min-w-80 overflow-hidden rounded-2xl border border-white/10 bg-[#292b46] p-1.5 shadow-[0_22px_45px_-18px_rgba(0,0,0,.75)]">
           <div className="flex items-center justify-between px-2.5 py-2"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-200">{heading}</p>{values.length ? <button className="text-xs font-semibold text-slate-300 transition hover:text-white" onClick={() => onChange([])} type="button">Clear all</button> : null}</div>
           <div className="max-h-60 space-y-1 overflow-y-auto pr-1">
             {options.map((option) => {
@@ -814,14 +814,14 @@ export default function Home() {
   if (!user) {
     return (
       <main className="min-h-screen overflow-hidden bg-[#f8f9fc] text-slate-900">
-        <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-6 lg:px-8">
+        <nav className="mx-auto flex w-full max-w-7xl flex-col items-center gap-4 px-5 py-5 sm:flex-row sm:justify-between sm:px-6 sm:py-6 lg:px-8">
           <Logo />
-          <button className="text-sm font-semibold text-slate-600 transition hover:text-slate-950" onClick={() => setAuthMode(authMode === "signup" ? "signin" : "signup")} type="button">
+          <button className="text-center text-sm font-semibold text-slate-600 transition hover:text-slate-950" onClick={() => setAuthMode(authMode === "signup" ? "signin" : "signup")} type="button">
             {authMode === "signup" ? "Already a member? Sign in" : "New here? Create an account"}
           </button>
         </nav>
 
-        <section className="relative mx-auto grid w-full max-w-7xl items-center gap-14 px-6 pb-16 pt-12 lg:grid-cols-[1.05fr_.95fr] lg:px-8 lg:pb-28 lg:pt-20">
+        <section className="relative mx-auto grid w-full max-w-7xl items-center gap-12 px-5 pb-12 pt-8 sm:px-6 sm:pb-16 sm:pt-12 lg:grid-cols-[1.05fr_.95fr] lg:gap-14 lg:px-8 lg:pb-28 lg:pt-20">
           <div className="pointer-events-none absolute -left-36 top-16 h-96 w-96 rounded-full bg-violet-200/40 blur-3xl" />
           <div className="pointer-events-none absolute right-0 top-0 h-80 w-80 rounded-full bg-sky-100/80 blur-3xl" />
           <div className="relative">
@@ -829,7 +829,7 @@ export default function Home() {
               <Icon className="h-3.5 w-3.5" name="sparkle" />
               A calmer way to find your next role
             </div>
-            <h1 className="max-w-2xl text-5xl font-semibold tracking-[-0.055em] text-slate-950 sm:text-6xl lg:text-7xl">
+            <h1 className="max-w-2xl text-4xl font-semibold tracking-[-0.055em] text-slate-950 sm:text-6xl lg:text-7xl">
               Your job search,<br />
               <span className="text-gradient">working smarter.</span>
             </h1>
@@ -858,18 +858,27 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f7fb] text-slate-900">
-      <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-[#f6f7fb]/80 backdrop-blur-xl">
+    <main className="min-h-screen w-full overflow-x-hidden bg-[#f6f7fb] text-slate-900">
+      <header className="sticky top-0 z-20 w-full border-b border-slate-200/70 bg-[#f6f7fb]/80 backdrop-blur-xl">
         <div className="mx-auto flex h-[76px] max-w-[1440px] items-center justify-between px-5 sm:px-8">
           <Logo compact />
           <div className="flex items-center gap-3">
             <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 sm:flex"><StatusDot active={integrationsReady} />{integrationsReady ? "Search ready" : "Setup needed"}</div>
+            <button aria-label="Sign out" className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900 lg:hidden" onClick={signOut} type="button"><Icon className="h-4 w-4" name="logout" /></button>
             <button className="grid h-9 w-9 place-items-center rounded-full bg-slate-950 text-xs font-bold uppercase text-white" title={user.email ?? "Account"} type="button">{firstName.slice(0, 2)}</button>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1440px] lg:grid-cols-[236px_minmax(0,1fr)]">
+      <nav aria-label="Workspace navigation" className="border-b border-slate-200/70 bg-white/60 lg:hidden">
+        <div className="grid grid-cols-3 gap-2 px-5 py-3 sm:px-8">
+          <MobileNavItem active={activeView === "search"} icon="search" label="Search" onClick={() => setActiveView("search")} />
+          <MobileNavItem active={activeView === "saved"} icon="target" label="Saved" onClick={() => setActiveView("saved")} />
+          <MobileNavItem active={activeView === "pipeline"} icon="briefcase" label="Pipeline" onClick={() => setActiveView("pipeline")} />
+        </div>
+      </nav>
+
+      <div className="mx-auto grid w-full max-w-[1440px] lg:grid-cols-[236px_minmax(0,1fr)]">
         <aside className="sticky top-[76px] hidden h-[calc(100vh-76px)] self-start flex-col border-r border-slate-200/70 px-4 py-7 lg:flex">
           <div className="space-y-1">
             <NavItem active={activeView === "search"} icon="search" label="Search roles" onClick={() => setActiveView("search")} />
@@ -888,9 +897,9 @@ export default function Home() {
           </div>
         </aside>
 
-        <section className="min-w-0 px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
+        <section className="min-w-0 w-full px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
-            <div><p className="text-sm font-medium text-violet-700">Your workspace</p><h1 className="mt-1 text-3xl font-semibold tracking-[-0.04em] text-slate-950">Good to see you, {firstName}.</h1><p className="mt-2 text-sm text-slate-500">Let’s make this next search count.</p></div>
+            <div><p className="text-sm font-medium text-violet-700">Your workspace</p><h1 className="mt-1 break-words text-3xl font-semibold tracking-[-0.04em] text-slate-950">Good to see you, {firstName}.</h1><p className="mt-2 text-sm text-slate-500">Let’s make this next search count.</p></div>
             <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-950" onClick={() => setShowSettings((value) => !value)} type="button"><Icon className="h-4 w-4" name="key" />Integrations<Icon className="h-3.5 w-3.5" name="chevron" /></button>
           </div>
 
@@ -905,7 +914,7 @@ export default function Home() {
               <div className="relative mt-6 grid gap-3 lg:grid-cols-12">
                 <div className="lg:col-span-5"><MultiSearchSelect customLabel="Other role" heading="Popular IT roles" icon="search" onChange={setSelectedRoles} options={popularItRoles} placeholder="Choose one or more IT roles" values={selectedRoles} /></div>
                 <div className="lg:col-span-4"><MultiSearchSelect customLabel="Other location" heading="Popular locations" icon="location" onChange={setSelectedLocations} options={popularIndianLocations} placeholder="Choose one or more locations" values={selectedLocations} /></div>
-                <div className="grid gap-2 lg:col-span-3"><button className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-bold text-slate-950 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60" disabled={isSearching} onClick={runScrape} type="button"><Icon className="h-4 w-4" name={isSearching ? "sparkle" : "arrow"} />{isSearching ? "Searching..." : "Find roles"}</button><button className="text-xs font-semibold text-violet-200 transition hover:text-white" onClick={() => void saveCurrentSearch()} type="button">Save this search</button></div>
+                <div className="order-last flex flex-col-reverse gap-2 lg:order-none lg:grid lg:col-span-3"><button className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-bold text-slate-950 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60" disabled={isSearching} onClick={runScrape} type="button"><Icon className="h-4 w-4" name={isSearching ? "sparkle" : "arrow"} />{isSearching ? "Searching..." : "Find roles"}</button><button className="text-xs font-semibold text-violet-200 transition hover:text-white" onClick={() => void saveCurrentSearch()} type="button">Save this search</button></div>
                 <div className="lg:col-span-4"><MultiSearchSelect customLabel="Other technology" heading="Popular technology stacks" icon="key" onChange={setSelectedTechStack} options={popularTechStacks} placeholder="Choose technology or stack" values={selectedTechStack} /></div>
                 <div className="lg:col-span-3"><SearchSelect icon="sparkle" label="posted within" onChange={setPostedWithin} options={postedWithinOptions} placeholder="Choose when the role was posted" value={postedWithin} /></div>
                 <div className="lg:col-span-3"><SearchSelect icon="target" label="experience range" onChange={setExperienceLevel} options={experienceLevelOptions} placeholder="Choose experience range" value={experienceLevel} /></div>
@@ -1021,6 +1030,10 @@ function AuthCard({ authMode, email, password, setAuthMode, setEmail, setPasswor
 
 function NavItem({ active = false, icon, label, onClick }: { active?: boolean; icon: IconName; label: string; onClick?: () => void }) {
   return <button className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${active ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:bg-white/70 hover:text-slate-900"}`} onClick={onClick} type="button"><Icon className="h-4 w-4" name={icon} />{label}</button>;
+}
+
+function MobileNavItem({ active = false, icon, label, onClick }: { active?: boolean; icon: IconName; label: string; onClick: () => void }) {
+  return <button aria-current={active ? "page" : undefined} className={`inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-semibold transition sm:gap-2 sm:px-3 sm:text-sm ${active ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950"}`} onClick={onClick} type="button"><Icon className="h-4 w-4" name={icon} />{label}</button>;
 }
 
 function IntegrationPanel({
